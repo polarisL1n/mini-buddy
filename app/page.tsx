@@ -1,65 +1,79 @@
-import Image from "next/image";
+"use client";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { useState, useRef, useEffect } from "react";
 
+import { ChatHeader } from "@/components/chat-header";
+import { ChatInput } from "@/components/chat-input";
+import { EmptyHint } from "@/components/empty-hint";
+import { LoadingPulse } from "@/components/loading-pulse";
+import { MessageBlock } from "@/components/message-block";
+import { TracePanel } from "@/components/trace-panel";
+import type { UIMessageLike } from "@/components/types";
+
+/**
+ * 主页 — 编排所有子组件
+ *
+ * 这一层只做三件事：
+ *   1. useChat 接 Vercel AI SDK
+ *   2. 自定义 fetch 拦截 X-Trace-Id 响应头
+ *   3. 自动滚动到底部
+ *
+ * 渲染逻辑全部下沉到独立组件（ChatHeader / MessageBlock / ChatInput / ...）
+ */
 export default function Home() {
+  const [enablePlan, setEnablePlan] = useState(true);
+  const [traceId, setTraceId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 拦截响应头里的 X-Trace-Id（Vercel AI SDK 不直接暴露这个）
+  const customFetch: typeof fetch = async (url, init) => {
+    const res = await fetch(url, init);
+    const tid = res.headers.get("X-Trace-Id");
+    if (tid) setTraceId(tid);
+    return res;
+  };
+
+  const { messages, sendMessage, status, error, stop } = useChat({
+    transport: new DefaultChatTransport({
+      api: "/api/agent",
+      body: () => ({ enablePlan }),
+      fetch: customFetch,
+    }),
+  });
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages]);
+
+  const isLoading = status === "submitted" || status === "streaming";
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="flex flex-col h-screen max-w-4xl w-full mx-auto p-4 gap-4">
+      <ChatHeader enablePlan={enablePlan} onTogglePlan={setEnablePlan} />
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-2">
+        {messages.length === 0 && <EmptyHint />}
+        {messages.map((m) => (
+          <MessageBlock key={m.id} message={m as UIMessageLike} />
+        ))}
+        {isLoading && <LoadingPulse />}
+        {error && (
+          <div className="text-[var(--error)] text-sm font-mono p-3 bg-[var(--muted)] rounded">
+            ⚠ {error.message}
+          </div>
+        )}
+        {traceId && !isLoading && <TracePanel traceId={traceId} />}
+      </div>
+
+      <ChatInput
+        isLoading={isLoading}
+        onSubmit={(text) => sendMessage({ text })}
+        onStop={stop}
+      />
     </div>
   );
 }
