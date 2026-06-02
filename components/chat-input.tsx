@@ -18,7 +18,7 @@ export function ChatInput({
   isLoading,
   onSubmit,
   onStop,
-  placeholder = 'Try: "Create a hello.ts that prints hello world, then run it"',
+  placeholder = '试试：写一个 hello.ts，打印 "hello world"，然后用 node 跑一下',
 }: ChatInputProps) {
   const [input, setInput] = useState("");
 

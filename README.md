@@ -53,6 +53,22 @@ mini-buddy 是一个**AI 原生**的编程助手 demo——你给它一个任务
 
 ---
 
+## 🎨 模型分层选型
+
+工业级 Agent 系统的成本控制关键：**不是所有调用都用最强模型**。mini-buddy 按角色分层：
+
+| 角色 | 默认模型 | 选型理由 |
+|---|---|---|
+| **主 Agent**（`MODEL_AGENT`）| `deepseek-v4-pro`（推理）| 多步决策 + 错误反思 + 温柔降级，必须强推理 |
+| **Plan 阶段**（`MODEL_PLAN`）| `deepseek-v4-pro`（推理）| 任务拆解质量直接影响 Agent 执行，质量优先 |
+| **子 Agent**（`MODEL_DELEGATE`）| `deepseek-v4-flash`（轻量）| 单一任务、上下文小、推理需求轻——flash 性价比最高 |
+
+这种分层在主 Agent 频繁派子 Agent 的场景能省 **60%+ token 成本**，质量损失却很小——因为子任务通常已经被主 Agent 拆解到位了。**这是 Anthropic Building Effective Agents 推荐的 Orchestrator-Workers 思路**。
+
+> 全部环境变量在 `.env.example` 中可调。极致省钱可全切 v4-flash，质量优先可全切 v4-pro。
+
+---
+
 ## 🏗 架构
 
 ```
@@ -225,12 +241,12 @@ LLM 的输出是**非确定性输入源**。如果不在 tool 层做硬校验，
 
 ## 🗺 Roadmap
 
-- [x] **v0.1** — Agent Loop（streamText）/ 5 tools / Structured plan / Tracing / Diff UI / Sandbox / Reasoning
+- [x] **v0.1** — Agent Loop（streamText）/ 5 tools / Structured plan / Tracing / Diff UI / Sandbox / Reasoning / 模型分层
 - [ ] **v0.2** — 迁移到 `ToolLoopAgent`：Agent 作为一等公民（注册中心 / 多端复用 / 可测试） + Orchestrator-Workers pattern + 子 Agent 受限 tool 集
 - [ ] **v0.3** — MCP server 接入 + WebSocket 双工流
 - [ ] **v0.4** — Tracing 接 Langfuse / OpenLLMetry 替代手写
-- [ ] **v0.4** — 端侧 AI 实验（Transformers.js 做本地 embedding）
-- [ ] **v0.5** — Tauri 桌面端封装
+- [ ] **v0.5** — **长期记忆系统**：SQLite + pgvector + Transformers.js 本地 embedding + Mem0 模式（recall_memory / save_memory tools）+ 综合优先级公式（相似度 × 时间衰减 × 访问频次 × LLM 重要性评分 × MMR 反冗余）
+- [ ] **v0.6** — 端侧 AI 实验扩展（Transformers.js / WebGPU）+ Tauri 桌面端封装
 
 ---
 

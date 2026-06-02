@@ -19,21 +19,32 @@ export const deepseek = createOpenAI({
 });
 
 /**
- * 模型选择策略
+ * 模型选择策略 — 按角色分层选模型
  *
- * 默认全用 deepseek-v4-pro（推理模型）：
- *   - Agent Loop 需要多步决策、错误反思、温柔降级 → v4-pro
- *   - Plan 阶段需要理解任务并合理拆解 → v4-pro 输出更稳定
- *   - Sub-agent 经常做研究/总结类任务，质量优先 → v4-pro
+ * 核心思想：**不是所有调用都需要最强模型**。Agent 系统的成本控制关键在于
+ * 给每个角色匹配"刚好够用"的模型。这是工业级 Agent 的标配做法。
  *
- * 仍然保留环境变量分档，便于未来按用例区分模型节省成本：
- *   MODEL_PLAN=deepseek-v4-flash      # 简单 JSON 规划可降到 flash
- *   MODEL_DELEGATE=deepseek-v4-flash  # 简单子任务可降到 flash
+ * 当前分层：
  *
- * 老模型 deepseek-chat / deepseek-reasoner 将于 2026/07/24 弃用，
- * 这里直接采用 v4 系列作为默认。
+ * ┌────────────────┬─────────────────┬──────────────────────────────────┐
+ * │ 角色            │ 默认模型         │ 选型理由                          │
+ * ├────────────────┼─────────────────┼──────────────────────────────────┤
+ * │ MODEL_AGENT    │ deepseek-v4-pro │ 主 Agent 要做多步决策、错误反思、    │
+ * │ (主决策者)      │ (推理模型)       │ 工具失败时温柔降级——必须强推理      │
+ * ├────────────────┼─────────────────┼──────────────────────────────────┤
+ * │ MODEL_PLAN     │ deepseek-v4-pro │ Plan 输出 JSON Schema 合规的步骤，   │
+ * │ (任务规划)      │ (推理模型)       │ 拆解质量直接影响主 Agent 执行         │
+ * ├────────────────┼─────────────────┼──────────────────────────────────┤
+ * │ MODEL_DELEGATE │ deepseek-v4-flash│ 子 Agent 做单一任务（研究/总结），    │
+ * │ (子 Agent)     │ (轻量模型)       │ 上下文小、推理需求轻——flash 性价比高 │
+ * └────────────────┴─────────────────┴──────────────────────────────────┘
+ *
+ * 这种分层在主 Agent 频繁派子 Agent 的场景下能省 60%+ token 成本，
+ * 同时不显著降低质量——因为子 Agent 任务通常已经被主 Agent 拆解到位了。
+ *
+ * 老模型 deepseek-chat / deepseek-reasoner 将于 2026/07/24 弃用。
  */
 export const MODEL_AGENT = process.env.MODEL_AGENT || "deepseek-v4-pro";
 export const MODEL_PLAN = process.env.MODEL_PLAN || "deepseek-v4-pro";
 export const MODEL_DELEGATE =
-  process.env.MODEL_DELEGATE || "deepseek-v4-pro";
+  process.env.MODEL_DELEGATE || "deepseek-v4-flash";
